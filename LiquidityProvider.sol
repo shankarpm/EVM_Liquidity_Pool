@@ -918,27 +918,27 @@ contract StakeContract is Pausable, Ownable, ReentrancyGuard {
     /**************************************************/
     /********** EXternal Contract Functions ***********/
     /**************************************************/
-    function stakeToken(uint256 _stakeAmount) external whenNotPaused 
-        amountGreaterThenZero(_stakeAmount){
+    function stakeToken(uint256 _stakeAmount) external whenNotPaused
+        amountGreaterThenZero(_stakeAmount) nonReentrant{
         require(LPToken.balanceOf(_msgSender()) >= _stakeAmount, "Insufficient Balance");
         
-            LPToken.transferFrom(_msgSender(), address(this), _stakeAmount);
+        // If wallet has tokens staked, calculate the rewards before adding the new token
+        if(stakeInfos[_msgSender()].amount>0){
+            uint256 reward= calculateRewards(_msgSender());
+            stakeInfos[_msgSender()].unclaimedRewards +=reward;
+        }
 
-                // If wallet has tokens staked, calculate the rewards before adding the new token
-                if(stakeInfos[_msgSender()].amount>0){
-                    uint256 reward= calculateRewards(_msgSender());
-                    stakeInfos[_msgSender()].unclaimedRewards +=reward;
-                }
-                
-                totalStakedAmount += _stakeAmount;
-                stakeInfos[_msgSender()].amount += _stakeAmount;
-                stakeInfos[_msgSender()].timeOfLastUpdate = block.timestamp;
+        totalStakedAmount += _stakeAmount;
+        stakeInfos[_msgSender()].amount += _stakeAmount;
+        stakeInfos[_msgSender()].timeOfLastUpdate = block.timestamp;
+
+        LPToken.transferFrom(_msgSender(), address(this), _stakeAmount);
         
         emit Staked(_msgSender(), _stakeAmount);
     }    
 
     function unstakeToken(uint256 _unstakeAmount) external whenNotPaused
-        amountGreaterThenZero(_unstakeAmount) returns (bool){
+        amountGreaterThenZero(_unstakeAmount) nonReentrant returns (bool){
         require(stakeInfos[_msgSender()].amount >= _unstakeAmount, "Withdraw amount is greater than stak");
 
         // Update the rewards for this user, as the amount of rewards decreases with less tokens.
@@ -964,7 +964,7 @@ contract StakeContract is Pausable, Ownable, ReentrancyGuard {
         return true;
     }
 
-    function claimReward() external whenNotPaused returns (bool){
+    function claimReward() external whenNotPaused nonReentrant returns (bool){
         // get claimed amount
         uint256 totalTokens = getMyClaimRewardTillNow();
         // claimed reward should be grater then 0
@@ -980,7 +980,7 @@ contract StakeContract is Pausable, Ownable, ReentrancyGuard {
         return true;
     }
     
-    function unstakeAllTokenAndClaimReward() external whenNotPaused returns (bool){
+    function unstakeAllTokenAndClaimReward() external whenNotPaused nonReentrant returns (bool){
 
         uint256 _unstakeAmount = stakeInfos[_msgSender()].amount;
         uint256 _stakeRewardAmount = stakeInfos[_msgSender()].unclaimedRewards + calculateRewards(_msgSender());
